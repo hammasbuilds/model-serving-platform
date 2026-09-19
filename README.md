@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/hammas159/model-serving-platform/actions/workflows/ci.yml"><img src="https://github.com/hammas159/model-serving-platform/actions/workflows/ci.yml/badge.svg" alt="ci"></a>
+  <a href="https://github.com/hammasbuilds/model-serving-platform/actions/workflows/ci.yml"><img src="https://github.com/hammasbuilds/model-serving-platform/actions/workflows/ci.yml/badge.svg" alt="ci"></a>
   <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="python">
   <img src="https://img.shields.io/badge/core%20deps-zero-success" alt="deps">
   <img src="https://img.shields.io/badge/no%20cloud-no%20Kubernetes-informational" alt="infra">
@@ -168,7 +168,7 @@ MIT
 ## Run it yourself
 
 ```bash
-git clone https://github.com/hammas159/model-serving-platform
+git clone https://github.com/hammasbuilds/model-serving-platform
 cd model-serving-platform
 
 uv sync --all-groups     # or: pip install -e ".[dev]"
