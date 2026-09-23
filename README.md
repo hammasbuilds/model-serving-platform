@@ -115,7 +115,7 @@ A breaching canary rolls itself back. `platform.rollbacks` records why.
 
 ## Tests
 
-**37 tests (32 core + 5 for the optional Streamlit demo), no models, no GPU, no training.**
+**32 tests, no models, no GPU, no training.**
 
 Models are fakes — a function that returns a value, fails, or is slow. Everything worth
 testing here is a *routing and lifecycle* behaviour, not a modelling one, which is why
@@ -172,7 +172,7 @@ git clone https://github.com/hammasbuilds/model-serving-platform
 cd model-serving-platform
 
 uv sync --all-groups     # or: pip install -e ".[dev]"
-make test                # 37 tests, no models, no GPU, no training
+make test                # 32 tests, no models, no GPU, no training
 ```
 
 Models are just callables, so you can wire in anything — sklearn, a torch module, a
