@@ -115,22 +115,24 @@ A breaching canary rolls itself back. `platform.rollbacks` records why.
 
 ## Tests
 
-**32 tests, no models, no GPU, no training.**
+**40 tests, no models, no GPU, no training.**
 
 Models are fakes — a function that returns a value, fails, or is slow. Everything worth
 testing here is a *routing and lifecycle* behaviour, not a modelling one, which is why
 the whole platform can be verified in milliseconds.
 
 ```bash
-make test
+uv run pytest -q      # or, once deps are installed: pytest -q
+make test              # shortcut for the same command, if you have `make`
 ```
 
 | Covered | |
 |---|---|
-| Registry | champion uniqueness, idempotent promotion, one canary at a time, rollback semantics, audit history |
+| Registry | champion uniqueness, idempotent promotion, one canary at a time, rollback semantics, audit history, shadow cannot steal champion/challenger |
 | Splitting | stickiness, distribution accuracy, salt decorrelation, boundaries |
-| Serving | routing, missing champion, unloaded model, model failure |
+| Serving | routing, missing champion, unloaded model, model failure, empty-string request key stays sticky |
 | Shadow | output discarded, failure contained, agreement reporting |
+| Public API | `from serving import ServingPlatform` (the quickstart import), `pip install -e ".[dev]"` installs pytest |
 | SLO | sample floor, latency breach, error breach, percentiles, relative comparison |
 | Rollback | bad canary rolls back, healthy canary survives, shared outage does not |
 
@@ -171,8 +173,10 @@ MIT
 git clone https://github.com/hammasbuilds/model-serving-platform
 cd model-serving-platform
 
-uv sync --all-groups     # or: pip install -e ".[dev]"
-make test                # 32 tests, no models, no GPU, no training
+uv sync --all-groups                # or, without uv: pip install -e ".[dev]"
+uv run pytest -q                    # 40 tests, no models, no GPU, no training
+# make test                         # shortcut for the line above, if you have `make`
+# (make is not installed by default on Windows; the pytest command above needs no make)
 ```
 
 Models are just callables, so you can wire in anything — sklearn, a torch module, a
