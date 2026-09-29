@@ -52,7 +52,11 @@ class ServingPlatform:
             return None, (time.perf_counter() - started) * 1000, str(exc)
 
     def predict(self, name: str, features: dict, *, request_key: str | None = None) -> Prediction:
-        request_key = request_key or uuid.uuid4().hex
+        # `or` would treat "" as missing and assign a fresh random key on every call,
+        # silently breaking stickiness for a caller using "" as a legitimate (if
+        # unusual) anonymous/guest identifier. Only None means "no key given".
+        if request_key is None:
+            request_key = uuid.uuid4().hex
         champion = self.registry.champion(name)
         if champion is None:
             raise ServingError(f"{name} has no champion")

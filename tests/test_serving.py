@@ -202,6 +202,24 @@ class TestServing:
         result = p.predict("risk", {})
         assert result.error and result.output is None
 
+    def test_empty_string_request_key_is_sticky_like_any_other_key(self):
+        """ "" is a legitimate anonymous/guest key. `key or default` treats it as
+        missing and would hand out a fresh random key every call, silently
+        destroying stickiness for exactly the caller who has no better key."""
+        p = platform()
+        p.registry.start_canary("risk", 2, 0.5)
+        results = [p.predict("risk", {}, request_key="").version for _ in range(20)]
+        assert len(set(results)) == 1
+        assert results[0] == p.predict("risk", {}, request_key="").version
+
+    def test_none_request_key_still_gets_a_fresh_random_key(self):
+        """Only the *absence* of a key (None, or the parameter left out) should
+        fall back to a random one - not an empty string."""
+        p = platform()
+        first = p.predict("risk", {}).request_id
+        second = p.predict("risk", {}).request_id
+        assert first != second
+
 
 class TestShadow:
     def test_shadow_output_is_recorded_but_never_returned(self):
