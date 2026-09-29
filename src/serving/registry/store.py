@@ -103,6 +103,13 @@ class Registry:
         return mv
 
     def set_canary_traffic(self, name: str, traffic: float) -> ModelVersion:
+        """Ramp an existing canary's traffic share.
+
+        Unlike `start_canary` (which refuses 1.0 - a canary cannot *start* at 100%,
+        that is just a cutover with extra steps), ramping up to 1.0 here is allowed
+        on purpose: it is how a canary is walked up to full traffic before an
+        explicit `promote`, without a discontinuity at the top of the range.
+        """
         challenger = self.challenger(name)
         if challenger is None:
             raise RegistryError(f"{name} has no challenger")
@@ -129,7 +136,18 @@ class Registry:
         return challenger
 
     def add_shadow(self, name: str, version: int) -> ModelVersion:
+        """Score real traffic with a version whose output is never served.
+
+        Refused for the current CHAMPION or CHALLENGER: shadowing one of those in
+        place would silently strip it of its role (an empty champion, or a canary
+        that stops receiving traffic) with no error anywhere near the call site.
+        """
         mv = self.get(name, version)
+        if mv.stage is Stage.CHAMPION:
+            raise RegistryError(f"{name} v{version} is the champion; cannot also shadow it")
+        if mv.stage is Stage.CHALLENGER:
+            raise RegistryError(f"{name} v{version} is the challenger; cannot also shadow it")
         mv.stage = Stage.SHADOW
         mv.traffic = 0.0
+        self.history.append({"action": "shadow", "model": name, "version": version})
         return mv

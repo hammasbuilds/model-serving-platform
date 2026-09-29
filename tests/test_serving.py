@@ -114,6 +114,38 @@ class TestRegistry:
         r.rollback("m")
         assert [h["action"] for h in r.history] == ["promote", "canary", "rollback"]
 
+    def test_add_shadow_cannot_steal_the_champion(self):
+        """Shadowing the champion in place would silently leave the model with no
+        champion at all - the next predict() fails far from this call site."""
+        r = Registry()
+        r.register("m", 1)
+        r.promote("m", 1)
+        with pytest.raises(RegistryError):
+            r.add_shadow("m", 1)
+        assert r.champion("m") is not None
+
+    def test_add_shadow_cannot_steal_the_challenger(self):
+        """Shadowing the challenger in place would silently stop it receiving
+        canary traffic while the registry still calls it the challenger."""
+        r = Registry()
+        r.register("m", 1)
+        r.register("m", 2)
+        r.promote("m", 1)
+        r.start_canary("m", 2, 0.1)
+        with pytest.raises(RegistryError):
+            r.add_shadow("m", 2)
+        assert r.challenger("m") is not None
+        assert r.challenger("m").version == 2
+
+    def test_add_shadow_on_an_unrelated_version_still_works(self):
+        r = Registry()
+        r.register("m", 1)
+        r.register("m", 2)
+        r.promote("m", 1)
+        r.add_shadow("m", 2)
+        assert r.get("m", 2).stage is Stage.SHADOW
+        assert "shadow" in [h["action"] for h in r.history]
+
 
 class TestTrafficSplit:
     def test_assignment_is_sticky(self):
