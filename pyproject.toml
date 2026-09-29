@@ -6,6 +6,11 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = []
 
+[project.optional-dependencies]
+# Real extra (pip install -e ".[dev]") so plain pip/venv users get pytest and ruff too.
+# Mirrored below as a PEP 735 dependency group for uv.
+dev = ["pytest>=8.3", "ruff>=0.8"]
+
 [dependency-groups]
 dev = ["pytest>=8.3", "ruff>=0.8"]
 
