@@ -6,8 +6,7 @@
   <a href="#six-decisions-worth-defending">Six decisions</a> &middot;
   <a href="#percentiles-not-averages">Percentiles</a> &middot;
   <a href="#usage">Usage</a> &middot;
-  <a href="#limits">Limits</a> &middot;
-  <a href="#problems-hit-while-building-this">Problems hit</a>
+  <a href="#limits">Limits</a> 
 </p>
 
 <p align="center">
@@ -212,51 +211,3 @@ The challenger's numbers are identical in both scenarios: 100% error rate, far p
 Rolling back scenario B would archive the challenger, restore a champion that is failing
 every request just as hard, and report the incident as handled. The rollback that does
 not happen is the harder one to get right, and the one nothing would have alerted on.
-
-## Problems hit while building this
-
-**Ranking canary assignment randomly looked fine and was not.** A coin flip per request
-means the same user hits the champion, then the challenger, then the champion again
-within one session — an inconsistent experience *and* an A/B result that measures
-nothing. *Fixed* by hashing the request identity, so assignment is sticky and the split
-can be replayed exactly during an investigation. A salt keeps two experiments on the
-same user uncorrelated.
-
-**Promotion could briefly leave two champions, or none.** Demoting the old champion and
-promoting the new one as separate steps is a race that will eventually happen under
-load, and a registry in that state serves whichever version it reaches first. *Fixed* by
-making promotion atomic, with a test asserting exactly one champion after repeated
-promotions.
-
-**The first auto-rollback rule would have rolled back during an outage.** If an upstream
-dependency fails, the challenger breaches its SLO — but so does the champion. Rolling
-back then removes a healthy deployment and fixes nothing, while the real problem
-continues. *Fixed* by checking the champion too, and that shared-outage case is a test.
-
-**…and that fix was still wrong, which the test could not see.** Building the dashboard
-above and clicking "upstream outage" rolled the canary back anyway. The cause:
-
-```python
-def breached(self, key):
-    """Return the reason for a breach, or None. Silent below min_samples."""
-```
-
-`None` means **either** "healthy" **or** "no verdict yet", and the outage guard read the
-second as the first. The challenger can cross `min_samples` first — bucketing is a hash,
-not an even split — and at that moment the champion is failing every request while still
-having nothing to say about it, so the outage looks exactly like a bad canary:
-
-```
-rollback fired at request 31
-  champion   v1  requests=12  breached=None          <- silent, not healthy
-  challenger v2  requests=20  breached=error rate 100.00%
-```
-
-**The existing test passed only because of how its request keys hashed.** At 50% canary,
-`u{i}` keys put the champion over `min_samples` first (request 29 vs 57) and the guard
-worked; `req-{i}` keys put the challenger first (31 vs 46) and it did not. The assertion
-was right and the fixture happened to avoid the failing path.
-
-*Fixed* by deferring the rollback decision until the champion has a verdict at all, with
-a second test using the key prefix that buckets the other way — verified to fail against
-the old logic, so the ordering cannot quietly come back.
