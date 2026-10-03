@@ -78,11 +78,29 @@ problem is upstream. Rolling back then removes a healthy deployment and fixes no
 This is a test:
 
 ```python
-def test_a_shared_outage_does_not_roll_back_the_canary():
-    ...
-    assert p.registry.challenger("risk") is not None
-    assert not p.rollbacks
+from serving import SLO, ServingPlatform, SLOMonitor
+
+def broken(features):
+    raise RuntimeError("upstream feature store timeout")
+
+p = ServingPlatform(monitor=SLOMonitor(slo=SLO(max_error_rate=0.05, min_samples=20)))
+for v in (1, 2):
+    p.registry.register("risk", v)
+    p.load("risk", v, broken)          # both versions fail: a shared outage
+p.registry.promote("risk", 1)
+p.registry.start_canary("risk", 2, 0.5)
+for i in range(300):
+    try:
+        p.predict("risk", {}, request_key=f"u{i}")
+    except RuntimeError:
+        pass                           # a failing model is recorded, then re-raised
+
+assert p.registry.challenger("risk") is not None   # canary still running
+assert not p.rollbacks                             # nothing was rolled back
 ```
+
+The same check lives in `tests/test_serving.py` as
+`test_a_shared_outage_does_not_roll_back_the_canary`.
 
 ## Percentiles, not averages
 
@@ -94,27 +112,40 @@ request actually had.
 ## Usage
 
 ```python
+from serving import ServingPlatform
+
+def champion_model(features):   # any callable: sklearn .predict, a torch module, an HTTP client
+    return 0.10
+
+def new_model(features):
+    return 0.12
+
+def shadow_model(features):
+    return 0.11
+
+features = {"income": 52_000, "age": 41}
+user_id = "user-42"
+
 platform = ServingPlatform()
-platform.registry.register("risk", 1)
-platform.registry.register("risk", 2)
-platform.load("risk", 1, champion_model)
-platform.load("risk", 2, new_model)
+for version, model in ((1, champion_model), (2, new_model), (3, shadow_model)):
+    platform.registry.register("risk", version)
+    platform.load("risk", version, model)
 
 platform.registry.promote("risk", 1)             # v1 serves everything
 platform.registry.start_canary("risk", 2, 0.05)  # 5% to v2
 platform.registry.add_shadow("risk", 3)          # v3 scores, nobody sees it
 
 result = platform.predict("risk", features, request_key=user_id)
-result.version          # 1 or 2, stable for this user
-result.shadow           # v3's output and whether it agreed
-platform.status("risk") # champion vs challenger, side by side
+print(result.version)          # 1 or 2, stable for this user
+print(result.shadow)           # v3's output and whether it agreed
+print(platform.status("risk")) # champion vs challenger, side by side
 ```
 
 A breaching canary rolls itself back. `platform.rollbacks` records why.
 
 ## Tests
 
-**40 tests, no models, no GPU, no training.**
+**44 tests, no models, no GPU, no training.**
 
 Models are fakes — a function that returns a value, fails, or is slow. Everything worth
 testing here is a *routing and lifecycle* behaviour, not a modelling one, which is why
@@ -131,7 +162,7 @@ make test              # shortcut for the same command, if you have `make`
 | Splitting | stickiness, distribution accuracy, salt decorrelation, boundaries |
 | Serving | routing, missing champion, unloaded model, model failure, empty-string request key stays sticky |
 | Shadow | output discarded, failure contained, agreement reporting |
-| Public API | `from serving import ServingPlatform` (the quickstart import), `pip install -e ".[dev]"` installs pytest |
+| Public API | every README python block runs verbatim, `from serving import ServingPlatform` (the quickstart import), `pip install -e ".[dev]"` installs pytest |
 | SLO | sample floor, latency breach, error breach, percentiles, relative comparison |
 | Rollback | bad canary rolls back, healthy canary survives, shared outage does not |
 
@@ -173,7 +204,7 @@ git clone https://github.com/hammasbuilds/model-serving-platform
 cd model-serving-platform
 
 uv sync --all-groups                # or, without uv: pip install -e ".[dev]"
-uv run pytest -q                    # 40 tests, no models, no GPU, no training
+uv run pytest -q                    # 44 tests, no models, no GPU, no training
 # make test                         # shortcut for the line above, if you have `make`
 # (make is not installed by default on Windows; the pytest command above needs no make)
 ```
@@ -184,17 +215,30 @@ remote endpoint:
 ```python
 from serving import ServingPlatform
 
+def champion_model(features):   # any callable: sklearn .predict, a torch module, an HTTP client
+    return 0.10
+
+def new_model(features):
+    return 0.12
+
+def shadow_model(features):
+    return 0.11
+
+features = {"income": 52_000, "age": 41}
+user_id = "user-42"
+
 platform = ServingPlatform()
 platform.registry.register("risk", 1); platform.load("risk", 1, champion_model)
 platform.registry.register("risk", 2); platform.load("risk", 2, new_model)
+platform.registry.register("risk", 3); platform.load("risk", 3, shadow_model)
 
 platform.registry.promote("risk", 1)              # v1 serves everything
 platform.registry.start_canary("risk", 2, 0.05)   # 5% to v2, sticky per user
 platform.registry.add_shadow("risk", 3)           # v3 scores, nobody sees it
 
 result = platform.predict("risk", features, request_key=user_id)
-platform.status("risk")     # champion vs challenger, side by side
-platform.rollbacks          # why anything was rolled back
+print(platform.status("risk"))  # champion vs challenger, side by side
+print(platform.rollbacks)       # why anything was rolled back
 ```
 
 ### Input / Output
