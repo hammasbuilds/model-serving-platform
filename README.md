@@ -21,6 +21,11 @@
 
 ## What it does
 
+An **in-process Python library**, not a network server: there is no HTTP endpoint or CLI.
+You call `ServingPlatform.predict()` from your own process (or wrap it in your own
+FastAPI/Flask handler). It owns the deployment logic - registry, canary, shadow, SLOs
+and auto-rollback - and takes any Python callable as a model.
+
 ```mermaid
 flowchart LR
     D["new model version"] --> C["canary<br/>small traffic share"]
@@ -243,11 +248,30 @@ print(platform.rollbacks)       # why anything was rolled back
 
 ### Input / Output
 
-![input](docs/images/input.png)
+`python demo.py` (output pasted from a real run):
 
-`python demo.py`
+```text
+INPUT
+   champion v1 and challenger v2, 50/50 canary split, SLO max_error_rate=2%
+   scenario A  challenger broken, champion healthy
+   scenario B  shared upstream down, both broken
+   2000 requests sent through each
 
-![output](docs/images/output.png)
+OUTPUT
+   scenario A  challenger broken, champion healthy
+      champion now       v1
+      rollbacks fired    1
+      reason             error rate 100.00% exceeds 2.00%
+
+   scenario B  shared upstream down, both broken
+      champion now       v1
+      rollbacks fired    0
+      held               both versions breach; rolling back would
+                         remove a deployment that is no better or worse
+
+   The difference is not in the challenger's numbers. They are equally
+   bad in both scenarios. It is in whether the champion is a way out.
+```
 
 The challenger's numbers are identical in both scenarios: 100% error rate, far past the
 2% SLO. The decisions are opposite.
